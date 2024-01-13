@@ -1,17 +1,16 @@
-﻿using MoneyOutService.Inerfaces;
+﻿using MoneyOutService.Interfaces;
 using MoneyOutService.Models.Exceptions;
 
 namespace MoneyOutService.Services
 {
     public class Client : IClient
     {
-        private readonly HttpClient _client;
-        private readonly string _apiRootUrl;
+        private readonly HttpClient _httpClient;
 
-        public Client(IConfiguration configuration, HttpClient client)
+        public Client(HttpClient httpClient, string clientToken)
         {
-            _client = client;
-            _apiRootUrl = configuration.GetValue<string>("ApiRootUrl");
+            _httpClient = httpClient;
+            _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {clientToken}");
         }
 
         private async Task<T> ProcessResult<T>(HttpResponseMessage responseMessage)
@@ -55,13 +54,19 @@ namespace MoneyOutService.Services
 
         public async Task<T> GetValue<T>(string url)
         {
-            var result = await _client.GetAsync(_apiRootUrl + url);
+            var result = await _httpClient.GetAsync( url);
             return await ProcessResult<T>(result);
         }
 
         public async Task<T> Put<T, R>(string url, R query)
         {
-            var result = await _client.PutAsJsonAsync(_apiRootUrl + url, query);
+            var result = await _httpClient.PutAsJsonAsync(url, query);
+            return await ProcessResult<T>(result);
+        }
+
+        public async Task<T> Post<T, R>(string url, R query)
+        {
+            var result = await _httpClient.PostAsJsonAsync(url, query);
             return await ProcessResult<T>(result);
         }
     }

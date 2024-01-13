@@ -1,6 +1,6 @@
 ﻿using System.Data;
 
-namespace MoneyOutService.Inerfaces
+namespace MoneyOutService.Interfaces
 {
     public interface IConnectionService
     {

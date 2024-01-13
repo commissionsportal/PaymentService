@@ -18,6 +18,8 @@
 
         public decimal Amount { get; set; }
 
+        public string Currency { get; set; } = string.Empty;
+
         public decimal Volume { get; set; }
 
         public decimal Percent { get; set; }

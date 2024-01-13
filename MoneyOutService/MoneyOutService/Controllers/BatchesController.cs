@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using MoneyOutService.Inerfaces;
+using MoneyOutService.Interfaces;
 using MoneyOutService.Models;
 
 namespace MoneyOutService.Controllers
@@ -15,21 +15,21 @@ namespace MoneyOutService.Controllers
             _batchService = batchService;
         }
 
-        [HttpGet]
-        [ProducesResponseType(typeof(BatchSummary[]), StatusCodes.Status200OK)]
-        public async Task<IActionResult> Get(int clientId, DateTime? begin, DateTime? end, int offset, int count)
-        {
-            try
-            {
-                var result = await _batchService.GetBatches(clientId, begin, end, offset, count);
-                Response.Headers.Add("Total", result.Count.ToString());
-                return Ok(result.Batches);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, ex.Message);
-            }
-        }
+        //[HttpGet]
+        //[ProducesResponseType(typeof(BatchSummary[]), StatusCodes.Status200OK)]
+        //public async Task<IActionResult> Get(int clientId, DateTime? begin, DateTime? end, int offset, int count)
+        //{
+        //    try
+        //    {
+        //        var result = await _batchService.GetBatches(clientId, begin, end, offset, count);
+        //        Response.Headers.Add("Total", result.Count.ToString());
+        //        return Ok(result.Batches);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return StatusCode(500, ex.Message);
+        //    }
+        //}
 
         [HttpPost]
         [ProducesResponseType(typeof(Batch), StatusCodes.Status202Accepted)]
@@ -59,25 +59,25 @@ namespace MoneyOutService.Controllers
             }
         }
 
-        [HttpGet("{id}", Name = "GetById")]
-        [ProducesResponseType(typeof(Batch), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> Get(int clientId, long id)
-        {
-            try
-            {
-                var batch = await _batchService.GetBatch(clientId, id);
-                if (batch == null)
-                {
-                    return NotFound(new { id });
-                }
+        //[HttpGet("{id}", Name = "GetById")]
+        //[ProducesResponseType(typeof(Batch), StatusCodes.Status200OK)]
+        //[ProducesResponseType(StatusCodes.Status404NotFound)]
+        //public async Task<IActionResult> Get(int clientId, long id)
+        //{
+        //    try
+        //    {
+        //        var batch = await _batchService.GetBatch(clientId, id);
+        //        if (batch == null)
+        //        {
+        //            return NotFound(new { id });
+        //        }
 
-                return Ok(batch);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, ex.Message);
-            }
-        }
+        //        return Ok(batch);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return StatusCode(500, ex.Message);
+        //    }
+        //}
     }
 }
