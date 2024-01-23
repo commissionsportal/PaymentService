@@ -1,4 +1,4 @@
-﻿namespace MoneyOutService.Models
+﻿namespace PaymentService.Models
 {
     public class CompensationPlanPeriod
     {

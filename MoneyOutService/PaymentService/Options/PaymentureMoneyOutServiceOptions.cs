@@ -1,4 +1,4 @@
-﻿namespace MoneyOutService.Options
+﻿namespace PaymentService.Options
 {
     public class PaymentureMoneyOutServiceOptions
     {

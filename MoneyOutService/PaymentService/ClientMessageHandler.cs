@@ -1,8 +1,8 @@
 ﻿using Microsoft.Extensions.Options;
-using MoneyOutService.Options;
+using PaymentService.Options;
 using System.Net.Http.Headers;
 
-namespace MoneyOutService
+namespace PaymentService
 {
     public class ClientMessageHandler : DelegatingHandler
     {

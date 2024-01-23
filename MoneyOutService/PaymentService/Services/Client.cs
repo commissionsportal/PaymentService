@@ -1,7 +1,7 @@
-﻿using MoneyOutService.Interfaces;
-using MoneyOutService.Models.Exceptions;
+﻿using PaymentService.Interfaces;
+using PaymentService.Services.Exceptions;
 
-namespace MoneyOutService.Services
+namespace PaymentService.Services
 {
     public class Client : IClient
     {
@@ -31,7 +31,12 @@ namespace MoneyOutService.Services
                 responseMessage.StatusCode == System.Net.HttpStatusCode.Created ||
                 responseMessage.StatusCode == System.Net.HttpStatusCode.Accepted)
             {
-                return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(content);
+                if (string.IsNullOrWhiteSpace(content)) return default;
+                var options = new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+                return System.Text.Json.JsonSerializer.Deserialize<T>(content, options);
             }
 
             if (responseMessage.StatusCode == System.Net.HttpStatusCode.NoContent)
@@ -52,9 +57,9 @@ namespace MoneyOutService.Services
             throw new System.Exception(content);
         }
 
-        public async Task<T> GetValue<T>(string url)
+        public async Task<T> Get<T>(string url)
         {
-            var result = await _httpClient.GetAsync( url);
+            var result = await _httpClient.GetAsync(url);
             return await ProcessResult<T>(result);
         }
 

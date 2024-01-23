@@ -1,10 +1,9 @@
-﻿using MoneyOutService.Models;
+﻿using PaymentService.Models;
 
-namespace MoneyOutService.Interfaces
+namespace PaymentService.Interfaces
 {
     public interface IBatchService
     {
-        public Task<Batch?> CreateBatch(int clientId, NewBatch batch);
-        //public Task<Batch?> GetBatch(int clientId, long batchId);
+        public Task ProcesseBatch(Batch batch);
     }
 }

@@ -1,8 +1,4 @@
-<<<<<<<< HEAD:MoneyOutService/PaymentService/Interfaces/IClient.cs
-﻿namespace MoneyOutService.Interfaces
-========
-﻿namespace PaymentService.Inerfaces
->>>>>>>> main:MoneyOutService/PaymentService/Inerfaces/IClient.cs
+﻿namespace PaymentService.Interfaces
 {
     public interface IClient
     {

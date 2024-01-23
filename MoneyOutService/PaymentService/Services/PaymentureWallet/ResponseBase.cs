@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace MoneyOutService.Models.PaymentureWallet
+namespace PaymentService.Models.PaymentureWallet
 {
     public class ResponseBase
     {

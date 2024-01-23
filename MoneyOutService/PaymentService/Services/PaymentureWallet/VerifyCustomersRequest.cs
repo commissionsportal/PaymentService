@@ -1,4 +1,4 @@
-﻿namespace MoneyOutService.Models.PaymentureWallet
+﻿namespace PaymentService.Models.PaymentureWallet
 {
     public class VerifyCustomersRequest
     {

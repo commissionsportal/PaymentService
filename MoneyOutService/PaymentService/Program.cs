@@ -1,9 +1,9 @@
 ﻿using Microsoft.OpenApi.Models;
-using MoneyOutService;
-using MoneyOutService.Interfaces;
-using MoneyOutService.Options;
-using MoneyOutService.Repositories;
-using MoneyOutService.Services;
+using PaymentService;
+using PaymentService.Interfaces;
+using PaymentService.Options;
+using PaymentService.Repositories;
+using PaymentService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
@@ -20,7 +20,6 @@ builder.Logging.ClearProviders();
     .AddHttpMessageHandler<ClientMessageHandler>();
 
     builder.Services.AddSingleton<IBatchService, BatchService>();    
-    builder.Services.AddSingleton<IBatchRepository, BatchRepository>();
     builder.Services.AddSingleton<IBonusRepository, BonusRepository>();
     builder.Services.AddSingleton<IPaymentureWalletService, PaymentureWalletService>();
     

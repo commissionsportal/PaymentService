@@ -1,11 +1,11 @@
 ﻿using Microsoft.Extensions.Options;
-using MoneyOutService.Interfaces;
-using MoneyOutService.Models;
-using MoneyOutService.Models.PaymentureWallet;
-using MoneyOutService.Options;
+using PaymentService.Interfaces;
+using PaymentService.Models;
+using PaymentService.Models.PaymentureWallet;
+using PaymentService.Options;
 using System;
 
-namespace MoneyOutService.Services
+namespace PaymentService.Services
 {
     public class PaymentureWalletService : IPaymentureWalletService
     {
@@ -20,11 +20,11 @@ namespace MoneyOutService.Services
             _options = options.Value;
         }
 
-        public async Task<BatchResult> CreateBatch(List<BonusRelease> releases)
+        public async Task<BatchResult> CreateBatch(List<ReleaseResult> releases)
         {
-            var companyPointAccounts = await _client.GetValue<List<CompanyPointAccount>>($"{_options.PaymentureApiUrl}/api/CompanyPointAccount/GetCompanyPointAccounts?companyId={_options.CompanyId}");
+            var companyPointAccounts = await _client.Get<List<CompanyPointAccount>>($"{_options.PaymentureApiUrl}/api/CompanyPointAccount/GetCompanyPointAccounts?companyId={_options.CompanyId}");
 
-            if (companyPointAccounts == null )
+            if (companyPointAccounts == null)
             {
                 return new BatchResult();
             }
@@ -64,10 +64,10 @@ namespace MoneyOutService.Services
                 result.BatchSession = batchSession;
             }
 
-                return result;
+            return result;
         }
 
-        public async Task<List<StringResponse>> ProcessCommissionBatch(List<BonusRelease> releases, BatchResult batchInfo, CustomerDetails[] customerDetails)
+        public async Task<List<StringResponse>> ProcessCommissionBatch(List<ReleaseResult> releases, BatchResult batchInfo, CustomerDetails[] customerDetails)
         {
             var customersToVerify = new VerifyCustomersRequest { CompanyId = _options.CompanyId, ExternalIds = releases.Select(x => x.NodeId).ToList() };
             var customerVerifications = await _client.Post<List<StringResponse>, VerifyCustomersRequest>($"{_options.PaymentureApiUrl}/api/Customer/VerifyCustomers", customersToVerify);

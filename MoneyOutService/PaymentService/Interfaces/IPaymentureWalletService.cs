@@ -1,11 +1,11 @@
-﻿using MoneyOutService.Models;
-using MoneyOutService.Models.PaymentureWallet;
+﻿using PaymentService.Models;
+using PaymentService.Models.PaymentureWallet;
 
-namespace MoneyOutService.Interfaces
+namespace PaymentService.Interfaces
 {
     public interface IPaymentureWalletService
     {
-        Task<BatchResult> CreateBatch(List<BonusRelease> releases);
-        Task<List<StringResponse>> ProcessCommissionBatch(List<BonusRelease> releases, BatchResult batchInfo, CustomerDetails[] customerDetails);
+        Task<BatchResult> CreateBatch(List<ReleaseResult> releases);
+        Task<List<StringResponse>> ProcessCommissionBatch(List<ReleaseResult> releases, BatchResult batchInfo, CustomerDetails[] customerDetails);
     }
 }

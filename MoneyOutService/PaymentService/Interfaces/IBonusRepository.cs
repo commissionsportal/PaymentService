@@ -1,10 +1,9 @@
-﻿using MoneyOutService.Models;
+﻿using PaymentService.Models;
 
-namespace MoneyOutService.Interfaces
+namespace PaymentService.Interfaces
 {
     public interface IBonusRepository
     {
-        Task<IEnumerable<UnreleasedBonus>> GetUnreleasedBonuses(int clientId, DateTime? date, string[]? nodeIds, int offset, int count);
-        Task<IEnumerable<ReleaseResult>> ReleaseBonuses(int clientId, string batchId, BonusRelease[] releases);
+        Task UpdateBatch(string batchId, IEnumerable<ReleaseResult> released);
     }
 }
