@@ -1,17 +1,22 @@
-﻿using MoneyOutService.Inerfaces;
-using MoneyOutService.Models.Exceptions;
+﻿using PaymentService.Inerfaces;
+using PaymentService.Services.Exceptions;
 
-namespace MoneyOutService.Services
+namespace PaymentService.Services
 {
     public class Client : IClient
     {
         private readonly HttpClient _client;
-        private readonly string _apiRootUrl;
+        private readonly string _commissionRootUrl;
 
         public Client(IConfiguration configuration, HttpClient client)
         {
             _client = client;
-            _apiRootUrl = configuration.GetValue<string>("ApiRootUrl");
+            _commissionRootUrl = configuration.GetValue<string>("ApiUrl");
+        }
+
+        private string GetRootUrl()
+        {
+            return _commissionRootUrl;
         }
 
         private async Task<T> ProcessResult<T>(HttpResponseMessage responseMessage)
@@ -32,7 +37,12 @@ namespace MoneyOutService.Services
                 responseMessage.StatusCode == System.Net.HttpStatusCode.Created ||
                 responseMessage.StatusCode == System.Net.HttpStatusCode.Accepted)
             {
-                return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(content);
+                if (string.IsNullOrWhiteSpace(content)) return default;
+                var options = new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+                return System.Text.Json.JsonSerializer.Deserialize<T>(content, options);
             }
 
             if (responseMessage.StatusCode == System.Net.HttpStatusCode.NoContent)
@@ -53,15 +63,15 @@ namespace MoneyOutService.Services
             throw new System.Exception(content);
         }
 
-        public async Task<T> GetValue<T>(string url)
+        public async Task<T> Get<T>(string url)
         {
-            var result = await _client.GetAsync(_apiRootUrl + url);
+            var result = await _client.GetAsync(GetRootUrl() + url);
             return await ProcessResult<T>(result);
         }
 
         public async Task<T> Put<T, R>(string url, R query)
         {
-            var result = await _client.PutAsJsonAsync(_apiRootUrl + url, query);
+            var result = await _client.PutAsJsonAsync(GetRootUrl() + url, query);
             return await ProcessResult<T>(result);
         }
     }
