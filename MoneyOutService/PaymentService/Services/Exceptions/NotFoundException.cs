@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace MoneyOutService.Models.Exceptions
+namespace PaymentService.Services.Exceptions
 {
     public class NotFoundException : Exception
     {
