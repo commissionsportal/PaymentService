@@ -28,7 +28,7 @@ namespace PaymentService.Controllers
                     return BadRequest(ModelState);
                 }
 
-                await _batchService.ProcesseBatch(batch);
+                await _batchService.ProcessBatch(batch);
                 
                 return NoContent();
             }

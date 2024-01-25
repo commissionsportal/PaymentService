@@ -1,5 +1,5 @@
 ﻿using PaymentService.Interfaces;
-using PaymentService.Services.Exceptions;
+using PaymentService.Models.Exceptions;
 
 namespace PaymentService.Services
 {

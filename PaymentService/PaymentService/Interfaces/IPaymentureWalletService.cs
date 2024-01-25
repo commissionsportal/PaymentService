@@ -5,7 +5,7 @@ namespace PaymentService.Interfaces
 {
     public interface IPaymentureWalletService
     {
-        Task<BatchResult> CreateBatch(List<ReleaseResult> releases);
-        Task<List<StringResponse>> ProcessCommissionBatch(List<ReleaseResult> releases, BatchResult batchInfo, CustomerDetails[] customerDetails);
+        //Task<BatchResult> CreateBatch(List<ReleaseResult> releases);
+        Task<List<StringResponse>> ProcessCommissionBatch(Batch batch, CustomerDetails[] customerDetails);
     }
 }

@@ -1,9 +1,9 @@
 ﻿using Microsoft.Extensions.Options;
+using Newtonsoft.Json.Linq;
 using PaymentService.Interfaces;
 using PaymentService.Models;
 using PaymentService.Models.PaymentureWallet;
 using PaymentService.Options;
-using System;
 
 namespace PaymentService.Services
 {
@@ -20,104 +20,128 @@ namespace PaymentService.Services
             _options = options.Value;
         }
 
-        public async Task<BatchResult> CreateBatch(List<ReleaseResult> releases)
+        public async Task<List<StringResponse>> ProcessCommissionBatch(Batch batch, CustomerDetails[] customerDetails)
         {
+            var result = new List<StringResponse>();
+            var customersToVerify = new VerifyCustomersRequest { CompanyId = _options.CompanyId, ExternalIds = batch.Releases.Select(x => x.NodeId).ToList() };
             var companyPointAccounts = await _client.Get<List<CompanyPointAccount>>($"{_options.PaymentureApiUrl}/api/CompanyPointAccount/GetCompanyPointAccounts?companyId={_options.CompanyId}");
 
             if (companyPointAccounts == null)
             {
-                return new BatchResult();
+                return result;
             }
 
-            BatchResult result = new();
-            var clientIpAddress = Convert.ToString(_httpContextAccessor.HttpContext?.Request.Headers["X-Forwarded-For"]) ?? string.Empty;
-            Guid guid = Guid.NewGuid();
-            long ticksNow = DateTime.UtcNow.Ticks;
-            var batchSession = $"{guid}-{ticksNow}";
-            List<CommissionPayout> payoutBatchRequest = releases.Select(transaction => new CommissionPayout
-            {
-                BatchSession = batchSession,
-                Amount = (double)transaction.Amount,
-                ApprovedBy = "Automatic",
-                BatchId = string.Empty,
-                Comment = string.Empty,
-                CompanyId = _options.CompanyId,
-                ExternalCustomerID = transaction.NodeId,
-                IsHoldAmount = false,
-                PointAccountID = companyPointAccounts.Find(x => x.Data.CurrencyCode.Equals(transaction.Currency, StringComparison.InvariantCultureIgnoreCase))?.Data?.Id, //Needs to be set based on currency
-                RedeemType = 11, // Commission
-                ReferenceNo = $"{transaction.BonusId} | {transaction.NodeId} | {transaction.Currency}", // Concat BonusId, NodeId, Currency
-                Source = "Pillars",
-                Status = CommissionPayoutStatus.Pending,
-                Response = "",
-                TransactionType = TransactionType.Credit,
-                IpAddress = clientIpAddress,
-            }).ToList();
-
-            var saveBatchResult = await _client.Post<List<StringResponse>, List<CommissionPayout>>($"{_options.PaymentureApiUrl}/api/CommssionPayout/SaveCommissionPayoutList",
-               payoutBatchRequest);
-
-            //validate the result before returning
-            if (saveBatchResult.Count > 0 && saveBatchResult.FirstOrDefault()?.Status == ResponseStatus.Success)
-            {
-                result.BatchId = saveBatchResult.FirstOrDefault().Data;
-                result.BatchSession = batchSession;
-            }
-
-            return result;
-        }
-
-        public async Task<List<StringResponse>> ProcessCommissionBatch(List<ReleaseResult> releases, BatchResult batchInfo, CustomerDetails[] customerDetails)
-        {
-            var customersToVerify = new VerifyCustomersRequest { CompanyId = _options.CompanyId, ExternalIds = releases.Select(x => x.NodeId).ToList() };
             var customerVerifications = await _client.Post<List<StringResponse>, VerifyCustomersRequest>($"{_options.PaymentureApiUrl}/api/Customer/VerifyCustomers", customersToVerify);
             var createCustomersRequest = new List<PaymentureCustomer>();
 
             foreach (var customer in customerVerifications.Where(x => x.Status == ResponseStatus.Failed))
             {
-                var details = customerDetails.FirstOrDefault(x => x.Id == customer.Data);
-
-                if (details != null)
+                try
                 {
-                    var customerAddress = details.Addresses.FirstOrDefault();
+                    var details = customerDetails.FirstOrDefault(x => x.Id == customer.Data);
 
-                    createCustomersRequest.Add(new PaymentureCustomer
+                    if (details != null)
                     {
-                        ExternalCustomerID = customer.Data,
-                        CompanyID = _options.CompanyId,
-                        BackofficeID = customer.Data,
-                        FirstName = details.FirstName,
-                        LastName = details.LastName,
-                        CustomerType = "0",
-                        CustomerLanguage = details.Language,
-                        EmailAddress = details.EmailAddress,
-                        PhoneNumber = details.PhoneNumbers.FirstOrDefault()?.Number,
-                        DateOfBirth = details.BirthDate,
-                        Address = new PaymentureAddress
+                        var customerAddress = details.Addresses.FirstOrDefault();
+
+                        createCustomersRequest.Add(new PaymentureCustomer
                         {
-                            Address1 = customerAddress?.Line1,
-                            Address2 = customerAddress?.Line2,
-                            City = customerAddress?.City,
-                            State = customerAddress?.StateCode,
-                            CountryCode = customerAddress?.CountryCode,
-                            Zip = customerAddress?.Zip
-                        }
-                    });
+                            ExternalCustomerID = customer.Data,
+                            CompanyID = _options.CompanyId,
+                            BackofficeID = customer.Data,
+                            FirstName = details.FirstName,
+                            LastName = details.LastName,
+                            CustomerType = "0",
+                            CustomerLanguage = details.Language,
+                            EmailAddress = details.EmailAddress,
+                            PhoneNumber = details.PhoneNumbers?.FirstOrDefault()?.Number,
+                            DateOfBirth = details.BirthDate,
+                            Address = new PaymentureAddress
+                            {
+                                Address1 = customerAddress?.Line1,
+                                Address2 = customerAddress?.Line2,
+                                City = customerAddress?.City,
+                                State = customerAddress?.StateCode,
+                                CountryCode = customerAddress?.CountryCode,
+                                Zip = customerAddress?.Zip
+                            }
+                        });
+                    }
+                }
+                catch
+                {
+                    //log or something. The payout to this rep will likely fail
                 }
             }
 
-            var result = await _client.Post<BooleanResponse, List<PaymentureCustomer>>($"{_options.PaymentureApiUrl}/api/Customer/BulkCreateCustomers", createCustomersRequest);
+            var createCustomersResponse = await _client.Post<BooleanResponse, List<PaymentureCustomer>>($"{_options.PaymentureApiUrl}/api/Customer/BulkCreateCustomers", createCustomersRequest);
+
+            var distinctBonuses = batch.Releases.Select(x => x.BonusId).Distinct();
+            var distinctPeriods = batch.Releases.Select(x => x.PeriodId).Distinct();
+            string bonusIdsQueryParams = string.Join("&", distinctBonuses.Select(x => $"bonusIds={x}"));
+            var bonusTitles = await _client.Get<BonusTitles[]>($"{_options.PillarsApiUrl}/api/v1/Bonuses/Titles?{bonusIdsQueryParams}");
+            string periodsQueryParams = string.Join("&", distinctPeriods.Select(x => $"IdList={x}"));
+            var compPeriods = await _client.Get<CompensationPlanPeriod[]>($"{_options.PillarsApiUrl}/api/v1/CompensationPlans/0/Periods?{periodsQueryParams}");
+
+            var clientIpAddress = Convert.ToString(_httpContextAccessor.HttpContext?.Request.Headers["X-Forwarded-For"]) ?? string.Empty;
+            Guid guid = Guid.NewGuid();
+            long ticksNow = DateTime.UtcNow.Ticks;
+            var batchSession = $"{guid}-{ticksNow}";
+            List<CustomerPointTransactionsRequest> payoutBatchRequest = batch.Releases.Select(transaction => new CustomerPointTransactionsRequest
+            {
+                Amount = (double)transaction.Amount,
+                BatchId = batch.Id,
+                Comment = $"{bonusTitles.FirstOrDefault(x => x.BonusId == transaction.BonusId)?.Title} {compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.Begin}-{compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.End}",
+                CompanyId = _options.CompanyId,
+                ExternalCustomerID = transaction.NodeId,
+                PointAccountID = companyPointAccounts.Find(x => x.Data.CurrencyCode.Equals(transaction.Currency, StringComparison.InvariantCultureIgnoreCase))?.Data?.Id,
+                RedeemType = RedeemType.Commission,
+                ReferenceNo = $"{transaction.BonusId} | {transaction.NodeId} | {transaction.Currency}", // Concat BonusId, NodeId, Currency
+                Source = "Pillars",
+                TransactionType = TransactionType.Credit
+            }).ToList();
+
+            var pointTransactionsResult = await CreatePointTransactionBulk(payoutBatchRequest);
+
+            foreach ( var res in pointTransactionsResult)
+            {
+                result.Add(new StringResponse
+                {
+                    Data = res.TransactionNumber,
+                    Status = res.Status,
+                    Message = res.Message
+                });
+            }
+
+            return result;
+        }
+
+        private async Task<List<CreatePointAccountTransaction>> CreatePointTransactionBulk(List<CustomerPointTransactionsRequest> request)
+        {
+            var result = new List<CreatePointAccountTransaction>();
 
             try
             {
-                //call api to process the commission batch payments
-                return await _client.Post<List<StringResponse>, object>($"{_options.PaymentureApiUrl}/api/CommssionPayout/ProcessCommissionBatch?companyId={_options.CompanyId}&batchSession={batchInfo.BatchSession}&batchId={batchInfo.BatchId}", null);
+                var response = await _client.Post<List<StringResponse>, List<CustomerPointTransactionsRequest>>($"{_options.PaymentureApiUrl}/api/CustomerPointTransactions/BulkCreatePointTransaction", request);
+
+                foreach (var item in response)
+                {
+                    try
+                    {
+                        result.Add(new CreatePointAccountTransaction { TransactionNumber = item.Data, Status = item.Status, Message = item.Message });
+                    }
+                    catch (Exception)
+                    {
+                        result.Add(new CreatePointAccountTransaction { TransactionNumber = item.Data, Status = ResponseStatus.Failed, Message = item.Message });
+                    }
+                }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                return new List<StringResponse>();
+                throw;
             }
 
+            return result;
         }
     }
 }
