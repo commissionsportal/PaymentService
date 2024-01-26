@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Options;
-using Newtonsoft.Json.Linq;
 using PaymentService.Interfaces;
 using PaymentService.Models;
 using PaymentService.Models.PaymentureWallet;
@@ -103,7 +102,7 @@ namespace PaymentService.Services
 
             var pointTransactionsResult = await CreatePointTransactionBulk(payoutBatchRequest);
 
-            foreach ( var res in pointTransactionsResult)
+            foreach (var res in pointTransactionsResult)
             {
                 result.Add(new StringResponse
                 {
