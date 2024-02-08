@@ -12,12 +12,12 @@ builder.Logging.ClearProviders();
     builder.Configuration.AddEnvironmentVariables();
     builder.Services.Configure<PaymentureMoneyOutServiceOptions>(builder.Configuration.GetSection("PaymentureMoneyOutService"));
 
-    builder.Services.AddHttpClient<Client>(c =>
-    {
-        c.Timeout = TimeSpan.FromSeconds(30);
-    })
-    .SetHandlerLifetime(TimeSpan.FromMinutes(5))
-    .AddHttpMessageHandler<ClientMessageHandler>();
+    //builder.Services.AddHttpClient<Client>(c =>
+    //{
+    //    c.Timeout = TimeSpan.FromSeconds(30);
+    //})
+    //.SetHandlerLifetime(TimeSpan.FromMinutes(5))
+    //.AddHttpMessageHandler<ClientMessageHandler>();
 
     builder.Services.AddSingleton<IBatchService, BatchService>();    
     builder.Services.AddSingleton<IBonusRepository, BonusRepository>();

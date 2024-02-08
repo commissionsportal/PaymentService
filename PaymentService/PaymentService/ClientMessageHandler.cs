@@ -10,13 +10,13 @@ namespace PaymentService
 
         public ClientMessageHandler(IOptions<PaymentureMoneyOutServiceOptions> options)
         {
-            _clientToken = options.Value.ClientToken;
+            //_clientToken = options.Value.ClientToken;
         }
 
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _clientToken);
-            return await base.SendAsync(request, cancellationToken);
-        }
+        //protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        //{
+        //    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _clientToken);
+        //    return await base.SendAsync(request, cancellationToken);
+        //}
     }
 }
