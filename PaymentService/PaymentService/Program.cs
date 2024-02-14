@@ -9,7 +9,9 @@ builder.Logging.ClearProviders();
     builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
     builder.Configuration.AddEnvironmentVariables();
     builder.Services.Configure<PaymentureMoneyOutServiceOptions>(builder.Configuration.GetSection("PaymentureMoneyOutService"));
-
+    builder.Services.AddHttpClient();
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddSingleton<IClient, Client>();
     builder.Services.AddSingleton<IBatchService, BatchService>();    
     builder.Services.AddSingleton<IPaymentureWalletService, PaymentureWalletService>();
     

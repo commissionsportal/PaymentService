@@ -5,11 +5,11 @@ namespace PaymentService.Services
 {
     public class Client : IClient
     {
-        private readonly HttpClient _httpClient;
+        private readonly IHttpClientFactory _httpClientFactory;
 
-        public Client(HttpClient httpClient)
+        public Client(IHttpClientFactory httpClientFactory)
         {
-            _httpClient = httpClient;
+            _httpClientFactory = httpClientFactory;
         }
 
         private async Task<T> ProcessResult<T>(HttpResponseMessage responseMessage)
@@ -58,43 +58,52 @@ namespace PaymentService.Services
 
         public async Task<T> Get<T>(Dictionary<string, string>? headers, string url)
         {
+            using var client = _httpClientFactory.CreateClient();
+
             if (headers != null)
             {
                 foreach (var header in headers)
                 {
-                    _httpClient.DefaultRequestHeaders.Add(header.Key, header.Value);
+                    client.DefaultRequestHeaders.Add(header.Key, header.Value);
                 }
             }
 
-            var result = await _httpClient.GetAsync(url);
+            var result = await client.GetAsync(url);
+
             return await ProcessResult<T>(result);
         }
 
         public async Task<T> Put<T, R>(Dictionary<string, string>? headers, string url, R query)
         {
+            using var client = _httpClientFactory.CreateClient();
+
             if (headers != null)
             {
                 foreach (var header in headers)
                 {
-                    _httpClient.DefaultRequestHeaders.Add(header.Key, header.Value);
+                    client.DefaultRequestHeaders.Add(header.Key, header.Value);
                 }
             }
 
-            var result = await _httpClient.PutAsJsonAsync(url, query);
+            var result = await client.PutAsJsonAsync(url, query);
+
             return await ProcessResult<T>(result);
         }
 
         public async Task<T> Post<T, R>(Dictionary<string, string>? headers, string url, R query)
         {
+            using var client = _httpClientFactory.CreateClient();
+
             if (headers != null)
             {
                 foreach (var header in headers)
                 {
-                    _httpClient.DefaultRequestHeaders.Add(header.Key, header.Value);
+                    client.DefaultRequestHeaders.Add(header.Key, header.Value);
                 }
             }
 
-            var result = await _httpClient.PostAsJsonAsync(url, query);
+            var result = await client.PostAsJsonAsync(url, query);
+
             return await ProcessResult<T>(result);
         }
     }

@@ -3,6 +3,7 @@ using PaymentService.Interfaces;
 using PaymentService.Models;
 using PaymentService.Models.PaymentureWallet;
 using PaymentService.Options;
+
 namespace PaymentService.Services
 {
     public class PaymentureWalletService : IPaymentureWalletService
@@ -18,19 +19,22 @@ namespace PaymentService.Services
             _options = options.Value;
         }
 
-        public async Task<List<StringResponse>> ProcessCommissionBatch(Settings settings, string clientId, Batch batch, CustomerDetails[] customerDetails, HeaderData headerData)
+        public async Task<List<StringResponse>> ProcessCommissionBatch(string clientId, Batch batch, CustomerDetails[] customerDetails, HeaderData headerData)
         {
             var result = new List<StringResponse>();
             var customersToVerify = new VerifyCustomersRequest { CompanyId = clientId, ExternalIds = batch.Releases.Select(x => x.NodeId).ToList() };
-            var companyPointAccounts = await _client.Get<List<CompanyPointAccount>>(null, $"{_options.PaymentureApiUrl}/api/CompanyPointAccount/GetCompanyPointAccounts?companyId={clientId}");
+            var companyPointAccounts = await _client.Get<List<CompanyPointAccount>>(null, $"{_options.PaymentureBaseApiUrl}/api/CompanyPointAccount/GetCompanyPointAccounts?companyId={clientId}");
+
             if (companyPointAccounts == null)
             {
                 return result;
             }
+
             var token = await CreateToken(headerData);
             Dictionary<string, string> headers = new() { { "Authorization", token } };
-            var customerVerifications = await _client.Post<List<StringResponse>, VerifyCustomersRequest>(headers, $"{_options.PaymentureApiUrl}/api/Customer/VerifyCustomers", customersToVerify);
+            var customerVerifications = await _client.Post<List<StringResponse>, VerifyCustomersRequest>(headers, $"{_options.PaymentureBaseApiUrl}/api/Customer/VerifyCustomers", customersToVerify);
             var createCustomersRequest = new List<PaymentureCustomer>();
+
             foreach (var customer in customerVerifications.Where(x => x.Status == ResponseStatus.Failed))
             {
                 try
@@ -68,7 +72,8 @@ namespace PaymentService.Services
                     //log or something. The payout to this rep will likely fail
                 }
             }
-            var createCustomersResponse = await _client.Post<BooleanResponse, List<PaymentureCustomer>>(headers, $"{_options.PaymentureApiUrl}/api/Customer/BulkCreateCustomers", createCustomersRequest);
+
+            var createCustomersResponse = await _client.Post<BooleanResponse, List<PaymentureCustomer>>(headers, $"{_options.PaymentureBaseApiUrl}/api/Customer/BulkCreateCustomers", createCustomersRequest);
             var distinctBonuses = batch.Releases.Select(x => x.BonusId).Distinct();
             var distinctPeriods = batch.Releases.Select(x => x.PeriodId).Distinct();
             string bonusIdsQueryParams = string.Join("&", distinctBonuses.Select(x => $"bonusIds={x}"));
@@ -94,9 +99,11 @@ namespace PaymentService.Services
             }).ToList();
             //var pointTransactionsResult = await CreatePointTransactionBulk(payoutBatchRequest);
             var createTransResults = new List<CreatePointAccountTransaction>();
+
             try
             {
-                var response = await _client.Post<List<StringResponse>, List<CustomerPointTransactionsRequest>>(null, $"{_options.PaymentureApiUrl}/api/CustomerPointTransactions/BulkCreatePointTransaction", payoutBatchRequest);
+                var response = await _client.Post<List<StringResponse>, List<CustomerPointTransactionsRequest>>(null, $"{_options.PaymentureBaseApiUrl}/api/CustomerPointTransactions/BulkCreatePointTransaction", payoutBatchRequest);
+
                 foreach (var item in response)
                 {
                     try
@@ -113,6 +120,7 @@ namespace PaymentService.Services
             {
                 throw;
             }
+
             foreach (var res in createTransResults)
             {
                 result.Add(new StringResponse
@@ -122,15 +130,18 @@ namespace PaymentService.Services
                     Message = res.Message
                 });
             }
+
             return result;
         }
+
         public async Task<string> CreateToken(HeaderData headerData)
         {
             try
             {
                 TokenRequest trequest = new TokenRequest { ClientId = headerData.CallbackToken, Username = headerData.User, Password = headerData.Token };
-                var apiUrl = $"{_options.PaymentureApiUrl}/token";
+                var apiUrl = $"{_options.PaymentureBaseApiUrl}/token";
                 var response = await _client.Post<string, TokenRequest>(null, "url", trequest);
+
                 return response;
             }
             catch (Exception e)

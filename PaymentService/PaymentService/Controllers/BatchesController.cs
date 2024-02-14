@@ -33,7 +33,8 @@ namespace PaymentService.Controllers
                     User = HttpContext.Request.Headers["x-user"],
                     Token = HttpContext.Request.Headers["x-token"],
                     CallbackToken = HttpContext.Request.Headers["x-callbacktoken"],
-                    CallbackTokenExpiration = HttpContext.Request.Headers["x-callbackexpire"]
+                    CallbackTokenExpiration = HttpContext.Request.Headers["x-callbackexpire"],
+                    ClientId= HttpContext.Request.Headers["x-clientid"]
                 };
 
                 await _batchService.ProcessBatch(clientId, batch, headerData);
