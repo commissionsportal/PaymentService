@@ -1,6 +1,6 @@
 ﻿namespace PaymentService.Options
 {
-    public class PaymentureMoneyOutServiceOptions
+    public class PaymentureWalletServiceOptions
     {
         public string PaymentureBaseApiUrl { get; set; }
     }

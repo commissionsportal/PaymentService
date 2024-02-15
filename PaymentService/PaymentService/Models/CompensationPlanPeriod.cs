@@ -1,12 +1,22 @@
-﻿namespace PaymentService.Models
+﻿using Newtonsoft.Json;
+
+namespace PaymentService.Models
 {
     public class CompensationPlanPeriod
     {
+        [JsonProperty("id")]
         public int Id { get; set; }
-        public DateTime Begin { get; set; }
-        public DateTime End { get; set; }
+        
+        [JsonProperty("begin")]
+        public string Begin { get; set; }
+        
+        [JsonProperty("end")]
+        public string End { get; set; }
+        
+        [JsonProperty("compensationPlanId")]
         public int CompensationPlanId { get; set; }
+        
+        [JsonProperty("status")]
         public string Status { get; set; } = string.Empty;
-        public int SnapshotId { get; set; }
     }
 }

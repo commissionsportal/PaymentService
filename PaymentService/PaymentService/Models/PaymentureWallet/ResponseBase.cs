@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace PaymentService.Models.PaymentureWallet
 {
@@ -12,6 +13,7 @@ namespace PaymentService.Models.PaymentureWallet
             ErrorTransactionId = string.Empty;
         }
 
+        [JsonConverter(typeof(JsonStringEnumConverter))]
         [Required]
         public ResponseStatus Status { get; set; }
 

@@ -19,7 +19,7 @@ namespace PaymentService.Controllers
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public async Task<IActionResult> Post([FromQuery] string clientId, [FromBody] Batch batch)
+        public async Task<IActionResult> Post([FromBody] Batch batch)
         {
             try
             {
@@ -34,10 +34,11 @@ namespace PaymentService.Controllers
                     Token = HttpContext.Request.Headers["x-token"],
                     CallbackToken = HttpContext.Request.Headers["x-callbacktoken"],
                     CallbackTokenExpiration = HttpContext.Request.Headers["x-callbackexpire"],
-                    ClientId= HttpContext.Request.Headers["x-clientid"]
+                    ClientId = HttpContext.Request.Headers["x-clientid"],
+                    CompanyId = HttpContext.Request.Headers["x-companyid"]
                 };
 
-                await _batchService.ProcessBatch(clientId, batch, headerData);
+                await _batchService.ProcessBatch(batch, headerData);
                 
                 return NoContent();
             }

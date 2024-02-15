@@ -4,6 +4,6 @@ namespace PaymentService.Interfaces
 {
     public interface IBatchService
     {
-        public Task ProcessBatch(string clientId, Batch batch, HeaderData headerData);
+        public Task ProcessBatch(Batch batch, HeaderData headerData);
     }
 }

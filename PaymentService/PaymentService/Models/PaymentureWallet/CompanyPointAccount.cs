@@ -5,7 +5,7 @@ namespace PaymentService.Models.PaymentureWallet
     public class CompanyPointAccount
     {
         [JsonProperty("data")]
-        public CompanyPointAccountData Data { get; set; }
+        public List<CompanyPointAccountData> Data { get; set; }
     }
 
     public class CompanyPointAccountData

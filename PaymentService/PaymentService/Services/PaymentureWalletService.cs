@@ -10,29 +10,29 @@ namespace PaymentService.Services
     {
         private readonly IClient _client;
         private readonly IHttpContextAccessor _httpContextAccessor;
-        private readonly PaymentureMoneyOutServiceOptions _options;
+        private readonly PaymentureWalletServiceOptions _options;
 
-        public PaymentureWalletService(IClient client, IHttpContextAccessor httpContextAccessor, IOptions<PaymentureMoneyOutServiceOptions> options)
+        public PaymentureWalletService(IClient client, IHttpContextAccessor httpContextAccessor, IOptions<PaymentureWalletServiceOptions> options)
         {
             _client = client;
             _httpContextAccessor = httpContextAccessor;
             _options = options.Value;
         }
 
-        public async Task<List<StringResponse>> ProcessCommissionBatch(string clientId, Batch batch, CustomerDetails[] customerDetails, HeaderData headerData)
+        public async Task<List<StringResponse>> ProcessCommissionBatch(Batch batch, CustomerDetails[] customerDetails, HeaderData headerData)
         {
             var result = new List<StringResponse>();
-            var customersToVerify = new VerifyCustomersRequest { CompanyId = clientId, ExternalIds = batch.Releases.Select(x => x.NodeId).ToList() };
-            var companyPointAccounts = await _client.Get<List<CompanyPointAccount>>(null, $"{_options.PaymentureBaseApiUrl}/api/CompanyPointAccount/GetCompanyPointAccounts?companyId={clientId}");
+            var token = await CreateToken(headerData);
+            Dictionary<string, string> headers = new() { { "Authorization", $"Bearer {token}" } };
+            var customersToVerify = new VerifyCustomersRequest { CompanyId = headerData.CompanyId, ExternalIds = batch.Releases.Select(x => x.NodeId).ToList() };
+            var companyPointAccounts = await _client.Get<CompanyPointAccount>(headers, $"{_options.PaymentureBaseApiUrl}/api/CompanyPointAccount/GetCompanyPointAccounts?companyId={headerData.CompanyId}");
 
             if (companyPointAccounts == null)
             {
                 return result;
             }
-
-            var token = await CreateToken(headerData);
-            Dictionary<string, string> headers = new() { { "Authorization", token } };
-            var customerVerifications = await _client.Post<List<StringResponse>, VerifyCustomersRequest>(headers, $"{_options.PaymentureBaseApiUrl}/api/Customer/VerifyCustomers", customersToVerify);
+            //"[{\"data\":\"897F8AF401\",\"status\":\"Failed\",\"errorDescription\":null,\"message\":null,\"errorTransactionId\":null}]"
+            var customerVerifications = await _client.PostJson<List<StringResponse>, VerifyCustomersRequest>(headers, $"{_options.PaymentureBaseApiUrl}/api/Customer/VerifyCustomers", customersToVerify);
             var createCustomersRequest = new List<PaymentureCustomer>();
 
             foreach (var customer in customerVerifications.Where(x => x.Status == ResponseStatus.Failed))
@@ -45,9 +45,9 @@ namespace PaymentService.Services
                         var customerAddress = details.Addresses.FirstOrDefault();
                         createCustomersRequest.Add(new PaymentureCustomer
                         {
-                            ExternalCustomerID = customer.Data,
-                            CompanyID = clientId,
-                            BackofficeID = customer.Data,
+                            ExternalCustomerID = details.Id,
+                            CompanyID = headerData.CompanyId,
+                            BackofficeID = details.Id,
                             FirstName = details.FirstName,
                             LastName = details.LastName,
                             CustomerType = "0",
@@ -73,13 +73,17 @@ namespace PaymentService.Services
                 }
             }
 
-            var createCustomersResponse = await _client.Post<BooleanResponse, List<PaymentureCustomer>>(headers, $"{_options.PaymentureBaseApiUrl}/api/Customer/BulkCreateCustomers", createCustomersRequest);
+            if (createCustomersRequest.Any())
+            {
+                var createCustomersResponse = await _client.PostJson<BooleanResponse, List<PaymentureCustomer>>(headers, $"{_options.PaymentureBaseApiUrl}/api/Customer/BulkCreateCustomers", createCustomersRequest);
+            }
+
             var distinctBonuses = batch.Releases.Select(x => x.BonusId).Distinct();
             var distinctPeriods = batch.Releases.Select(x => x.PeriodId).Distinct();
             string bonusIdsQueryParams = string.Join("&", distinctBonuses.Select(x => $"bonusIds={x}"));
-            var bonusTitles = await _client.Get<BonusTitles[]>(null, $"https://api.pillarshub.com/{headerData.CallbackToken}/api/v1/Bonuses/Titles?{bonusIdsQueryParams}");
+            var bonusTitles = await _client.Get<BonusTitles[]>(new Dictionary<string, string> { { "Authorization", $"Bearer {headerData.CallbackToken}" } }, $"https://api.pillarshub.com/api/v1/Bonuses/Titles?{bonusIdsQueryParams}");
             string periodsQueryParams = string.Join("&", distinctPeriods.Select(x => $"IdList={x}"));
-            var compPeriods = await _client.Get<CompensationPlanPeriod[]>(null, $"https://api.pillarshub.com/{headerData.CallbackToken}/api/v1/CompensationPlans/0/Periods?{periodsQueryParams}");
+            var compPeriods = await _client.Get<CompensationPlanPeriod[]>(new Dictionary<string, string> { { "Authorization", $"Bearer {headerData.CallbackToken}" } }, $"https://api.pillarshub.com/api/v1/CompensationPlans/0/Periods?{periodsQueryParams}");
             var clientIpAddress = Convert.ToString(_httpContextAccessor.HttpContext?.Request.Headers["X-Forwarded-For"]) ?? string.Empty;
             Guid guid = Guid.NewGuid();
             long ticksNow = DateTime.UtcNow.Ticks;
@@ -89,9 +93,9 @@ namespace PaymentService.Services
                 Amount = (double)transaction.Amount,
                 BatchId = batch.Id,
                 Comment = $"{bonusTitles.FirstOrDefault(x => x.BonusId == transaction.BonusId)?.Title} {compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.Begin}-{compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.End}",
-                CompanyId = clientId,
+                CompanyId = headerData.CompanyId,
                 ExternalCustomerID = transaction.NodeId,
-                PointAccountID = companyPointAccounts.Find(x => x.Data.CurrencyCode.Equals(transaction.Currency, StringComparison.InvariantCultureIgnoreCase))?.Data?.Id,
+                PointAccountID = companyPointAccounts.Data.Find(x => x.CurrencyCode.Equals(transaction.Currency, StringComparison.InvariantCultureIgnoreCase))?.Id,
                 RedeemType = RedeemType.Commission,
                 ReferenceNo = $"{transaction.BonusId} | {transaction.NodeId} | {transaction.Currency}", // Concat BonusId, NodeId, Currency
                 Source = "Pillars",
@@ -102,7 +106,7 @@ namespace PaymentService.Services
 
             try
             {
-                var response = await _client.Post<List<StringResponse>, List<CustomerPointTransactionsRequest>>(null, $"{_options.PaymentureBaseApiUrl}/api/CustomerPointTransactions/BulkCreatePointTransaction", payoutBatchRequest);
+                var response = await _client.PostJson<List<StringResponse>, List<CustomerPointTransactionsRequest>>(headers, $"{_options.PaymentureBaseApiUrl}/api/CustomerPointTransactions/BulkCreatePointTransaction", payoutBatchRequest);
 
                 foreach (var item in response)
                 {
@@ -138,11 +142,15 @@ namespace PaymentService.Services
         {
             try
             {
-                TokenRequest trequest = new TokenRequest { ClientId = headerData.CallbackToken, Username = headerData.User, Password = headerData.Token };
-                var apiUrl = $"{_options.PaymentureBaseApiUrl}/token";
-                var response = await _client.Post<string, TokenRequest>(null, "url", trequest);
+                TokenRequest trequest = new() { client_id = headerData.ClientId, username = headerData.User, password = headerData.Token };
+                var response = await _client.Post<TokenResponse, TokenRequest>(null, $"{_options.PaymentureBaseApiUrl}/token", trequest);
 
-                return response;
+                if (string.IsNullOrWhiteSpace(response?.access_token))
+                {
+                    throw new Exception("Failed to obtain Paymenture API token.");
+                }
+
+                return response.access_token;
             }
             catch (Exception e)
             {

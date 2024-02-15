@@ -1,5 +1,6 @@
 ﻿using PaymentService.Interfaces;
 using PaymentService.Models.Exceptions;
+using System.Reflection;
 
 namespace PaymentService.Services
 {
@@ -59,6 +60,7 @@ namespace PaymentService.Services
         public async Task<T> Get<T>(Dictionary<string, string>? headers, string url)
         {
             using var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromMinutes(3);
 
             if (headers != null)
             {
@@ -76,6 +78,7 @@ namespace PaymentService.Services
         public async Task<T> Put<T, R>(Dictionary<string, string>? headers, string url, R query)
         {
             using var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromMinutes(3);
 
             if (headers != null)
             {
@@ -90,9 +93,10 @@ namespace PaymentService.Services
             return await ProcessResult<T>(result);
         }
 
-        public async Task<T> Post<T, R>(Dictionary<string, string>? headers, string url, R query)
+        public async Task<T> PostJson<T, R>(Dictionary<string, string>? headers, string url, R query)
         {
             using var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromMinutes(3);
 
             if (headers != null)
             {
@@ -103,6 +107,31 @@ namespace PaymentService.Services
             }
 
             var result = await client.PostAsJsonAsync(url, query);
+
+            return await ProcessResult<T>(result);
+        }
+
+        public async Task<T> Post<T, R>(Dictionary<string, string>? headers, string url, R query)
+        {
+            using var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromMinutes(3);
+
+            if (headers != null)
+            {
+                foreach (var header in headers)
+                {
+                    client.DefaultRequestHeaders.Add(header.Key, header.Value);
+                }
+            }
+
+            var content = new FormUrlEncodedContent(query.GetType()
+                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .ToDictionary(
+                    prop => prop.Name,
+                    prop => prop.GetValue(query, null)?.ToString() ?? string.Empty
+                ));
+
+            var result = await client.PostAsync(url, content);
 
             return await ProcessResult<T>(result);
         }

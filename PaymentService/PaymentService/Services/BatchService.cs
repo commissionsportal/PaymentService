@@ -14,11 +14,11 @@ namespace PaymentService.Services
             _paymentureWalletService = paymentureWalletService;
         }
 
-        public async Task ProcessBatch(string clientId, Batch batch, HeaderData headerData)
+        public async Task ProcessBatch(Batch batch, HeaderData headerData)
         {
             string formattedUrlQueryIds = string.Join("&", batch.Releases.Select(x => $"ids={x.NodeId}"));
             var customerDetails = await _client.Get<CustomerDetails[]>(new Dictionary<string, string> { { "Authorization", $"Bearer {headerData.CallbackToken}" } }, $"https://api.pillarshub.com/api/v1/Customers?{formattedUrlQueryIds}");
-            await _paymentureWalletService.ProcessCommissionBatch(clientId, batch, customerDetails, headerData);
+            await _paymentureWalletService.ProcessCommissionBatch(batch, customerDetails, headerData);
         }
     }
 }

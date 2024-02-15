@@ -8,7 +8,7 @@ builder.Logging.ClearProviders();
 {
     builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
     builder.Configuration.AddEnvironmentVariables();
-    builder.Services.Configure<PaymentureMoneyOutServiceOptions>(builder.Configuration.GetSection("PaymentureMoneyOutService"));
+    builder.Services.Configure<PaymentureWalletServiceOptions>(options => options.PaymentureBaseApiUrl = builder.Configuration["PaymentureBaseApiUrl"]);
     builder.Services.AddHttpClient();
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddSingleton<IClient, Client>();
