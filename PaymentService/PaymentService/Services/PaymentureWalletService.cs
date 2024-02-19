@@ -1,8 +1,6 @@
-﻿using Microsoft.Extensions.Options;
-using PaymentService.Interfaces;
+﻿using PaymentService.Interfaces;
 using PaymentService.Models;
 using PaymentService.Models.PaymentureWallet;
-using PaymentService.Options;
 
 namespace PaymentService.Services
 {
@@ -10,13 +8,13 @@ namespace PaymentService.Services
     {
         private readonly IClient _client;
         private readonly IHttpContextAccessor _httpContextAccessor;
-        private readonly PaymentureWalletServiceOptions _options;
+        //private readonly PaymentureWalletServiceOptions _options;
 
-        public PaymentureWalletService(IClient client, IHttpContextAccessor httpContextAccessor, IOptions<PaymentureWalletServiceOptions> options)
+        public PaymentureWalletService(IClient client, IHttpContextAccessor httpContextAccessor)
         {
             _client = client;
             _httpContextAccessor = httpContextAccessor;
-            _options = options.Value;
+            //_options = options.Value;
         }
 
         public async Task<List<StringResponse>> ProcessCommissionBatch(Batch batch, CustomerDetails[] customerDetails, HeaderData headerData)
@@ -25,14 +23,14 @@ namespace PaymentService.Services
             var token = await CreateToken(headerData);
             Dictionary<string, string> headers = new() { { "Authorization", $"Bearer {token}" } };
             var customersToVerify = new VerifyCustomersRequest { CompanyId = headerData.CompanyId, ExternalIds = batch.Releases.Select(x => x.NodeId).ToList() };
-            var companyPointAccounts = await _client.Get<CompanyPointAccount>(headers, $"{_options.PaymentureBaseApiUrl}/api/CompanyPointAccount/GetCompanyPointAccounts?companyId={headerData.CompanyId}");
+            var companyPointAccounts = await _client.Get<CompanyPointAccount>(headers, $"https://zippyapi.paymenture.com/api/CompanyPointAccount/GetCompanyPointAccounts?companyId={headerData.CompanyId}");
 
             if (companyPointAccounts == null)
             {
                 return result;
             }
             //"[{\"data\":\"897F8AF401\",\"status\":\"Failed\",\"errorDescription\":null,\"message\":null,\"errorTransactionId\":null}]"
-            var customerVerifications = await _client.PostJson<List<StringResponse>, VerifyCustomersRequest>(headers, $"{_options.PaymentureBaseApiUrl}/api/Customer/VerifyCustomers", customersToVerify);
+            var customerVerifications = await _client.PostJson<List<StringResponse>, VerifyCustomersRequest>(headers, $"https://zippyapi.paymenture.com/api/Customer/VerifyCustomers", customersToVerify);
             var createCustomersRequest = new List<PaymentureCustomer>();
 
             foreach (var customer in customerVerifications.Where(x => x.Status == ResponseStatus.Failed))
@@ -75,7 +73,7 @@ namespace PaymentService.Services
 
             if (createCustomersRequest.Any())
             {
-                var createCustomersResponse = await _client.PostJson<BooleanResponse, List<PaymentureCustomer>>(headers, $"{_options.PaymentureBaseApiUrl}/api/Customer/BulkCreateCustomers", createCustomersRequest);
+                var createCustomersResponse = await _client.PostJson<BooleanResponse, List<PaymentureCustomer>>(headers, $"https://zippyapi.paymenture.com/api/Customer/VerifyCustomers", createCustomersRequest);
             }
 
             var distinctBonuses = batch.Releases.Select(x => x.BonusId).Distinct();
@@ -106,7 +104,7 @@ namespace PaymentService.Services
 
             try
             {
-                var response = await _client.PostJson<List<StringResponse>, List<CustomerPointTransactionsRequest>>(headers, $"{_options.PaymentureBaseApiUrl}/api/CustomerPointTransactions/BulkCreatePointTransaction", payoutBatchRequest);
+                var response = await _client.PostJson<List<StringResponse>, List<CustomerPointTransactionsRequest>>(headers, $"https://zippyapi.paymenture.com/api/CustomerPointTransactions/BulkCreatePointTransaction", payoutBatchRequest);
 
                 foreach (var item in response)
                 {
@@ -143,7 +141,7 @@ namespace PaymentService.Services
             try
             {
                 TokenRequest trequest = new() { client_id = headerData.ClientId, username = headerData.User, password = headerData.Token };
-                var response = await _client.Post<TokenResponse, TokenRequest>(null, $"{_options.PaymentureBaseApiUrl}/token", trequest);
+                var response = await _client.Post<TokenResponse, TokenRequest>(null, $"https://zippyapi.paymenture.com/token", trequest);
 
                 if (string.IsNullOrWhiteSpace(response?.access_token))
                 {
