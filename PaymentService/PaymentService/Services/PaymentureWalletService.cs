@@ -1,6 +1,7 @@
 ﻿using PaymentService.Interfaces;
 using PaymentService.Models;
 using PaymentService.Models.PaymentureWallet;
+using System;
 
 namespace PaymentService.Services
 {
@@ -86,20 +87,38 @@ namespace PaymentService.Services
             Guid guid = Guid.NewGuid();
             long ticksNow = DateTime.UtcNow.Ticks;
             var batchSession = $"{guid}-{ticksNow}";
-            List<CustomerPointTransactionsRequest> payoutBatchRequest = batch.Releases.Select(transaction => new CustomerPointTransactionsRequest
+            List<CustomerPointTransactionsRequest> payoutBatchRequest = new();
+            
+            foreach(var transaction in batch.Releases)
             {
-                Amount = (double)transaction.Amount,
-                BatchId = batch.Id,
-                Comment = $"{bonusTitles.FirstOrDefault(x => x.BonusId == transaction.BonusId)?.Title} {compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.Begin}-{compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.End}",
-                CompanyId = headerData.CompanyId,
-                ExternalCustomerID = transaction.NodeId,
-                PointAccountID = companyPointAccounts.Data.Find(x => x.CurrencyCode.Equals(transaction.Currency, StringComparison.InvariantCultureIgnoreCase))?.Id,
-                RedeemType = RedeemType.Commission,
-                ReferenceNo = $"{transaction.BonusId} | {transaction.NodeId} | {transaction.Currency}", // Concat BonusId, NodeId, Currency
-                Source = "Pillars",
-                TransactionType = TransactionType.Credit
-            }).ToList();
-            //var pointTransactionsResult = await CreatePointTransactionBulk(payoutBatchRequest);
+                string periodBegin = compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.Begin;
+                string periodEnd = compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.End;
+
+                try
+                {
+                    DateTime dt = DateTime.Parse(compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.Begin);
+                    periodBegin = dt.ToString("yyyy/MM/dd");
+                    dt = DateTime.Parse(compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.End);
+                    periodEnd = dt.ToString("yyyy/MM/dd");
+                }
+                catch(Exception) { }
+                
+
+                payoutBatchRequest.Add(
+                    new CustomerPointTransactionsRequest
+                    {
+                        Amount = (double)transaction.Amount,
+                        BatchId = batch.Id,
+                        Comment = $"{bonusTitles.FirstOrDefault(x => x.BonusId == transaction.BonusId)?.Title} {periodBegin}-{periodEnd}",
+                        CompanyId = headerData.CompanyId,
+                        ExternalCustomerID = transaction.NodeId,
+                        PointAccountID = companyPointAccounts.Data.Find(x => x.CurrencyCode.Equals(transaction.Currency, StringComparison.InvariantCultureIgnoreCase))?.Id,
+                        RedeemType = RedeemType.Commission,
+                        ReferenceNo = $"{transaction.BonusId} | {transaction.NodeId} | {transaction.Currency}", // Concat BonusId, NodeId, Currency
+                        Source = "Pillars",
+                        TransactionType = TransactionType.Credit
+                    });
+            }
             var createTransResults = new List<CreatePointAccountTransaction>();
 
             try
