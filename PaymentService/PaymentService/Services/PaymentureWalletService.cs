@@ -73,7 +73,7 @@ namespace PaymentService.Services
 
             if (createCustomersRequest.Any())
             {
-                var createCustomersResponse = await _client.PostJson<BooleanResponse, List<PaymentureCustomer>>(headers, $"https://zippyapi.paymenture.com/api/Customer/VerifyCustomers", createCustomersRequest);
+                var createCustomersResponse = await _client.PostJson<BooleanResponse, List<PaymentureCustomer>>(headers, $"https://zippyapi.paymenture.com/api/Customer/BulkCreateCustomers", createCustomersRequest);
             }
 
             var distinctBonuses = batch.Releases.Select(x => x.BonusId).Distinct();
