@@ -1,22 +1,24 @@
-﻿using PaymentService.Inerfaces;
+﻿using PaymentService.Interfaces;
 using PaymentService.Models;
 
 namespace PaymentService.Services
 {
     public class BatchService : IBatchService
     {
-        private readonly IBonusRepository _bonusRepository;
+        private readonly IClient _client;
+        private readonly IPaymentureWalletService _paymentureWalletService;
 
-        public BatchService(IBonusRepository bonusRepository)
+        public BatchService(IClient client, IPaymentureWalletService paymentureWalletService)
         {
-            _bonusRepository = bonusRepository;
+            _client = client;
+            _paymentureWalletService = paymentureWalletService;
         }
 
-        public async Task ProcesseBatch(Batch batch)
+        public async Task ProcessBatch(Batch batch, HeaderData headerData)
         {
-            //Process the bonuses and mark them released.
-            var bonuses = batch.Releases.Select(x => { x.Status = Status.Success; return x; });
-            await _bonusRepository.UpdateBatch(batch.Id, bonuses);
+            string formattedUrlQueryIds = string.Join("&", batch.Releases.Select(x => $"ids={x.NodeId}"));
+            var customerDetails = await _client.Get<CustomerDetails[]>(new Dictionary<string, string> { { "Authorization", $"Bearer {headerData.CallbackToken}" } }, $"https://api.pillarshub.com/api/v1/Customers?{formattedUrlQueryIds}");
+            await _paymentureWalletService.ProcessCommissionBatch(batch, customerDetails, headerData);
         }
     }
 }

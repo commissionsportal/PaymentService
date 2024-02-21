@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using PaymentService.Inerfaces;
+using PaymentService.Interfaces;
 using PaymentService.Models;
 
 namespace PaymentService.Controllers
@@ -28,7 +28,17 @@ namespace PaymentService.Controllers
                     return BadRequest(ModelState);
                 }
 
-                await _batchService.ProcesseBatch(batch);
+                var headerData = new HeaderData
+                {
+                    User = HttpContext.Request.Headers["x-user"],
+                    Token = HttpContext.Request.Headers["x-token"],
+                    CallbackToken = HttpContext.Request.Headers["x-callbacktoken"],
+                    CallbackTokenExpiration = HttpContext.Request.Headers["x-callbackexpire"],
+                    ClientId = HttpContext.Request.Headers["x-clientid"],
+                    CompanyId = HttpContext.Request.Headers["x-companyid"]
+                };
+
+                await _batchService.ProcessBatch(batch, headerData);
                 
                 return NoContent();
             }

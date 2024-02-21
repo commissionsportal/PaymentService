@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace PaymentService.Services.Exceptions
+namespace PaymentService.Models.Exceptions
 {
     public class UniqueKeyException : Exception
     {
