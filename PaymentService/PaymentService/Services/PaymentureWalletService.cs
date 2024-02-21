@@ -1,7 +1,6 @@
 ﻿using PaymentService.Interfaces;
 using PaymentService.Models;
 using PaymentService.Models.PaymentureWallet;
-using System;
 
 namespace PaymentService.Services
 {
@@ -9,13 +8,11 @@ namespace PaymentService.Services
     {
         private readonly IClient _client;
         private readonly IHttpContextAccessor _httpContextAccessor;
-        //private readonly PaymentureWalletServiceOptions _options;
 
         public PaymentureWalletService(IClient client, IHttpContextAccessor httpContextAccessor)
         {
             _client = client;
             _httpContextAccessor = httpContextAccessor;
-            //_options = options.Value;
         }
 
         public async Task<List<StringResponse>> ProcessCommissionBatch(Batch batch, CustomerDetails[] customerDetails, HeaderData headerData)
