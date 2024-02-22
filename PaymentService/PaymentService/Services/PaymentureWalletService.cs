@@ -89,6 +89,7 @@ namespace PaymentService.Services
                                 EmailAddress = details.EmailAddress,
                                 PhoneNumber = details.PhoneNumbers?.FirstOrDefault()?.Number,
                                 DateOfBirth = details.BirthDate,
+                                CountryCode = customerAddress?.CountryCode,
                                 Address = new PaymentureAddress
                                 {
                                     Address1 = customerAddress?.Line1,
