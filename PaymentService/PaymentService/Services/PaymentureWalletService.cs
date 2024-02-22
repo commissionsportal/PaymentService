@@ -1,6 +1,9 @@
-﻿using PaymentService.Interfaces;
+﻿using Newtonsoft.Json;
+using PaymentService.Interfaces;
 using PaymentService.Models;
 using PaymentService.Models.PaymentureWallet;
+using System.Net;
+using System.Reflection.PortableExecutable;
 
 namespace PaymentService.Services
 {
@@ -17,136 +20,279 @@ namespace PaymentService.Services
 
         public async Task<List<StringResponse>> ProcessCommissionBatch(Batch batch, CustomerDetails[] customerDetails, HeaderData headerData)
         {
-            var result = new List<StringResponse>();
             var token = await CreateToken(headerData);
             Dictionary<string, string> headers = new() { { "Authorization", $"Bearer {token}" } };
-            var customersToVerify = new VerifyCustomersRequest { CompanyId = headerData.CompanyId, ExternalIds = batch.Releases.Select(x => x.NodeId).ToList() };
-            var companyPointAccounts = await _client.Get<CompanyPointAccount>(headers, $"https://zippyapi.paymenture.com/api/CompanyPointAccount/GetCompanyPointAccounts?companyId={headerData.CompanyId}");
-
-            if (companyPointAccounts == null)
-            {
-                return result;
-            }
-            //"[{\"data\":\"897F8AF401\",\"status\":\"Failed\",\"errorDescription\":null,\"message\":null,\"errorTransactionId\":null}]"
-            var customerVerifications = await _client.PostJson<List<StringResponse>, VerifyCustomersRequest>(headers, $"https://zippyapi.paymenture.com/api/Customer/VerifyCustomers", customersToVerify);
-            var createCustomersRequest = new List<PaymentureCustomer>();
-
-            foreach (var customer in customerVerifications.Where(x => x.Status == ResponseStatus.Failed))
-            {
-                try
-                {
-                    var details = customerDetails.FirstOrDefault(x => x.Id == customer.Data);
-                    if (details != null)
-                    {
-                        var customerAddress = details.Addresses.FirstOrDefault();
-                        createCustomersRequest.Add(new PaymentureCustomer
-                        {
-                            ExternalCustomerID = details.Id,
-                            CompanyID = headerData.CompanyId,
-                            BackofficeID = details.Id,
-                            FirstName = details.FirstName,
-                            LastName = details.LastName,
-                            CustomerType = "0",
-                            CustomerLanguage = details.Language,
-                            EmailAddress = details.EmailAddress,
-                            PhoneNumber = details.PhoneNumbers?.FirstOrDefault()?.Number,
-                            DateOfBirth = details.BirthDate,
-                            Address = new PaymentureAddress
-                            {
-                                Address1 = customerAddress?.Line1,
-                                Address2 = customerAddress?.Line2,
-                                City = customerAddress?.City,
-                                State = customerAddress?.StateCode,
-                                CountryCode = customerAddress?.CountryCode,
-                                Zip = customerAddress?.Zip
-                            }
-                        });
-                    }
-                }
-                catch
-                {
-                    //log or something. The payout to this rep will likely fail
-                }
-            }
-
-            if (createCustomersRequest.Any())
-            {
-                var createCustomersResponse = await _client.PostJson<BooleanResponse, List<PaymentureCustomer>>(headers, $"https://zippyapi.paymenture.com/api/Customer/BulkCreateCustomers", createCustomersRequest);
-            }
-
-            var distinctBonuses = batch.Releases.Select(x => x.BonusId).Distinct();
-            var distinctPeriods = batch.Releases.Select(x => x.PeriodId).Distinct();
-            string bonusIdsQueryParams = string.Join("&", distinctBonuses.Select(x => $"bonusIds={x}"));
-            var bonusTitles = await _client.Get<BonusTitles[]>(new Dictionary<string, string> { { "Authorization", $"Bearer {headerData.CallbackToken}" } }, $"https://api.pillarshub.com/api/v1/Bonuses/Titles?{bonusIdsQueryParams}");
-            string periodsQueryParams = string.Join("&", distinctPeriods.Select(x => $"IdList={x}"));
-            var compPeriods = await _client.Get<CompensationPlanPeriod[]>(new Dictionary<string, string> { { "Authorization", $"Bearer {headerData.CallbackToken}" } }, $"https://api.pillarshub.com/api/v1/CompensationPlans/0/Periods?{periodsQueryParams}");
-            var clientIpAddress = Convert.ToString(_httpContextAccessor.HttpContext?.Request.Headers["X-Forwarded-For"]) ?? string.Empty;
-            Guid guid = Guid.NewGuid();
-            long ticksNow = DateTime.UtcNow.Ticks;
-            var batchSession = $"{guid}-{ticksNow}";
-            List<CustomerPointTransactionsRequest> payoutBatchRequest = new();
-            
-            foreach(var transaction in batch.Releases)
-            {
-                string periodBegin = compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.Begin;
-                string periodEnd = compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.End;
-
-                try
-                {
-                    DateTime dt = DateTime.Parse(compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.Begin);
-                    periodBegin = dt.ToString("yyyy/MM/dd");
-                    dt = DateTime.Parse(compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.End);
-                    periodEnd = dt.ToString("yyyy/MM/dd");
-                }
-                catch(Exception) { }
-                
-
-                payoutBatchRequest.Add(
-                    new CustomerPointTransactionsRequest
-                    {
-                        Amount = (double)transaction.Amount,
-                        BatchId = batch.Id,
-                        Comment = $"{bonusTitles.FirstOrDefault(x => x.BonusId == transaction.BonusId)?.Title} {periodBegin}-{periodEnd}",
-                        CompanyId = headerData.CompanyId,
-                        ExternalCustomerID = transaction.NodeId,
-                        PointAccountID = companyPointAccounts.Data.Find(x => x.CurrencyCode.Equals(transaction.Currency, StringComparison.InvariantCultureIgnoreCase))?.Id,
-                        RedeemType = RedeemType.Commission,
-                        ReferenceNo = $"{transaction.BonusId} | {transaction.NodeId} | {transaction.Currency}", // Concat BonusId, NodeId, Currency
-                        Source = "Pillars",
-                        TransactionType = TransactionType.Credit
-                    });
-            }
-            var createTransResults = new List<CreatePointAccountTransaction>();
+            var result = new List<StringResponse>();
 
             try
             {
-                var response = await _client.PostJson<List<StringResponse>, List<CustomerPointTransactionsRequest>>(headers, $"https://zippyapi.paymenture.com/api/CustomerPointTransactions/BulkCreatePointTransaction", payoutBatchRequest);
+                var activityLog = new ActivityLogRequest
+                {
+                    APIName = "ProcessCommissionBatch",
+                    CompanyId = headerData.CompanyId,
+                    Status = 200,
+                    Request = $"ProcessCommissionBatch Step 1. Customer Details: {JsonConvert.SerializeObject(customerDetails)}",
+                    RequestDateTime = DateTime.Now
+                };
+                await _client.PostJson<BooleanResponse, ActivityLogRequest>(headers, $"https://zippyapi.paymenture.com/api/ActivityLog/CreateActivityLog", activityLog);
 
-                foreach (var item in response)
+                var customersToVerify = new VerifyCustomersRequest { CompanyId = headerData.CompanyId, ExternalIds = batch.Releases.Select(x => x.NodeId).ToList() };
+                var companyPointAccounts = await _client.Get<CompanyPointAccount>(headers, $"https://zippyapi.paymenture.com/api/CompanyPointAccount/GetCompanyPointAccounts?companyId={headerData.CompanyId}");
+
+                activityLog = new ActivityLogRequest
+                {
+                    APIName = "ProcessCommissionBatch",
+                    CompanyId = headerData.CompanyId,
+                    Status = 200,
+                    Request = $"ProcessCommissionBatch Step 2. Company Point Accounts: {JsonConvert.SerializeObject(companyPointAccounts)}",
+                    RequestDateTime = DateTime.Now
+                };
+                await _client.PostJson<BooleanResponse, ActivityLogRequest>(headers, $"https://zippyapi.paymenture.com/api/ActivityLog/CreateActivityLog", activityLog);
+
+                if (companyPointAccounts == null)
+                {
+                    return result;
+                }
+
+                //"[{\"data\":\"897F8AF401\",\"status\":\"Failed\",\"errorDescription\":null,\"message\":null,\"errorTransactionId\":null}]"
+                var customerVerifications = await _client.PostJson<List<StringResponse>, VerifyCustomersRequest>(headers, $"https://zippyapi.paymenture.com/api/Customer/VerifyCustomers", customersToVerify);
+                var createCustomersRequest = new List<PaymentureCustomer>();
+
+                activityLog = new ActivityLogRequest
+                {
+                    APIName = "ProcessCommissionBatch",
+                    CompanyId = headerData.CompanyId,
+                    Status = 200,
+                    Request = $"ProcessCommissionBatch Step 3. Customer Verification: {JsonConvert.SerializeObject(customersToVerify)}",
+                    Response = JsonConvert.SerializeObject(customerVerifications),
+                    RequestDateTime = DateTime.Now
+                };
+                await _client.PostJson<BooleanResponse, ActivityLogRequest>(headers, $"https://zippyapi.paymenture.com/api/ActivityLog/CreateActivityLog", activityLog);
+
+                foreach (var customer in customerVerifications.Where(x => x.Status == ResponseStatus.Failed))
                 {
                     try
                     {
-                        createTransResults.Add(new CreatePointAccountTransaction { TransactionNumber = item.Data, Status = item.Status, Message = item.Message });
+                        var details = customerDetails.FirstOrDefault(x => x.Id == customer.Data);
+                        if (details != null)
+                        {
+                            var customerAddress = details.Addresses.FirstOrDefault();
+                            createCustomersRequest.Add(new PaymentureCustomer
+                            {
+                                ExternalCustomerID = details.Id,
+                                CompanyID = headerData.CompanyId,
+                                BackofficeID = details.Id,
+                                FirstName = details.FirstName,
+                                LastName = details.LastName,
+                                CustomerType = "0",
+                                CustomerLanguage = details.Language,
+                                EmailAddress = details.EmailAddress,
+                                PhoneNumber = details.PhoneNumbers?.FirstOrDefault()?.Number,
+                                DateOfBirth = details.BirthDate,
+                                Address = new PaymentureAddress
+                                {
+                                    Address1 = customerAddress?.Line1,
+                                    Address2 = customerAddress?.Line2,
+                                    City = customerAddress?.City,
+                                    State = customerAddress?.StateCode,
+                                    CountryCode = customerAddress?.CountryCode,
+                                    Zip = customerAddress?.Zip
+                                }
+                            });
+                        }
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
-                        createTransResults.Add(new CreatePointAccountTransaction { TransactionNumber = item.Data, Status = ResponseStatus.Failed, Message = item.Message });
+                        activityLog = new ActivityLogRequest
+                        {
+                            APIName = "ProcessCommissionBatch",
+                            CompanyId = headerData.CompanyId,
+                            Status = 500,
+                            Request = $"Customer Verifications: {JsonConvert.SerializeObject(customerVerifications)}",
+                            Response = ex.ToString(),
+                            ErrorDescription = ex.Message,
+                            RequestDateTime = DateTime.Now
+                        };
+                        await _client.PostJson<BooleanResponse, ActivityLogRequest>(headers, $"https://zippyapi.paymenture.com/api/ActivityLog/CreateActivityLog", activityLog);
                     }
                 }
-            }
-            catch (Exception)
-            {
-                throw;
-            }
 
-            foreach (var res in createTransResults)
-            {
-                result.Add(new StringResponse
+                activityLog = new ActivityLogRequest
                 {
-                    Data = res.TransactionNumber,
-                    Status = res.Status,
-                    Message = res.Message
-                });
+                    APIName = "ProcessCommissionBatch",
+                    CompanyId = headerData.CompanyId,
+                    Status = 200,
+                    Request = $"ProcessCommissionBatch Step 4. Customers to create: {JsonConvert.SerializeObject(createCustomersRequest)}",
+                    RequestDateTime = DateTime.Now
+                };
+                await _client.PostJson<BooleanResponse, ActivityLogRequest>(headers, $"https://zippyapi.paymenture.com/api/ActivityLog/CreateActivityLog", activityLog);
+
+                if (createCustomersRequest.Any())
+                {
+                    try
+                    {
+                        var createCustomersResponse = await _client.PostJson<BooleanResponse, List<PaymentureCustomer>>(headers, $"https://zippyapi.paymenture.com/api/Customer/BulkCreateCustomers", createCustomersRequest);
+
+                        activityLog = new ActivityLogRequest
+                        {
+                            APIName = "ProcessCommissionBatch",
+                            CompanyId = headerData.CompanyId,
+                            Status = 200,
+                            Request = $"ProcessCommissionBatch Step 5. Customers to create: {JsonConvert.SerializeObject(createCustomersRequest)}",
+                            Response = JsonConvert.SerializeObject(createCustomersResponse),
+                            RequestDateTime = DateTime.Now
+                        };
+                        await _client.PostJson<BooleanResponse, ActivityLogRequest>(headers, $"https://zippyapi.paymenture.com/api/ActivityLog/CreateActivityLog", activityLog);
+                    }
+                    catch (Exception ex)
+                    {
+                        activityLog = new ActivityLogRequest
+                        {
+                            APIName = "ProcessCommissionBatch",
+                            CompanyId = headerData.CompanyId,
+                            Status = 500,
+                            Request = $"Customer Creation: {JsonConvert.SerializeObject(createCustomersRequest)}",
+                            Response = ex.ToString(),
+                            ErrorDescription = ex.Message,
+                            RequestDateTime = DateTime.Now
+                        };
+                        await _client.PostJson<BooleanResponse, ActivityLogRequest>(headers, $"https://zippyapi.paymenture.com/api/ActivityLog/CreateActivityLog", activityLog);
+                    }
+                }
+
+                var distinctBonuses = batch.Releases.Select(x => x.BonusId).Distinct();
+                var distinctPeriods = batch.Releases.Select(x => x.PeriodId).Distinct();
+                string bonusIdsQueryParams = string.Join("&", distinctBonuses.Select(x => $"bonusIds={x}"));
+                var bonusTitles = await _client.Get<BonusTitles[]>(new Dictionary<string, string> { { "Authorization", $"Bearer {headerData.CallbackToken}" } }, $"https://api.pillarshub.com/api/v1/Bonuses/Titles?{bonusIdsQueryParams}");
+                string periodsQueryParams = string.Join("&", distinctPeriods.Select(x => $"IdList={x}"));
+                var compPeriods = await _client.Get<CompensationPlanPeriod[]>(new Dictionary<string, string> { { "Authorization", $"Bearer {headerData.CallbackToken}" } }, $"https://api.pillarshub.com/api/v1/CompensationPlans/0/Periods?{periodsQueryParams}");
+                var clientIpAddress = Convert.ToString(_httpContextAccessor.HttpContext?.Request.Headers["X-Forwarded-For"]) ?? string.Empty;
+                Guid guid = Guid.NewGuid();
+                long ticksNow = DateTime.UtcNow.Ticks;
+                var batchSession = $"{guid}-{ticksNow}";
+                List<CustomerPointTransactionsRequest> payoutBatchRequest = new();
+
+                foreach (var transaction in batch.Releases)
+                {
+                    string periodBegin = compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.Begin;
+                    string periodEnd = compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.End;
+
+                    try
+                    {
+                        DateTime dt = DateTime.Parse(compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.Begin);
+                        periodBegin = dt.ToString("yyyy/MM/dd");
+                        dt = DateTime.Parse(compPeriods.FirstOrDefault(x => x.Id == transaction.PeriodId)?.End);
+                        periodEnd = dt.ToString("yyyy/MM/dd");
+                    }
+                    catch (Exception ex)
+                    {
+                        activityLog = new ActivityLogRequest
+                        {
+                            APIName = "ProcessCommissionBatch",
+                            CompanyId = headerData.CompanyId,
+                            Status = 500,
+                            Request = "Failed parsing dates",
+                            Response = ex.ToString(),
+                            ErrorDescription = ex.Message,
+                            RequestDateTime = DateTime.Now
+                        };
+                        await _client.PostJson<BooleanResponse, ActivityLogRequest>(headers, $"https://zippyapi.paymenture.com/api/ActivityLog/CreateActivityLog", activityLog);
+                    }
+
+                    payoutBatchRequest.Add(
+                        new CustomerPointTransactionsRequest
+                        {
+                            Amount = (double)transaction.Amount,
+                            BatchId = batch.Id,
+                            Comment = $"{bonusTitles.FirstOrDefault(x => x.BonusId == transaction.BonusId)?.Title} {periodBegin}-{periodEnd}",
+                            CompanyId = headerData.CompanyId,
+                            ExternalCustomerID = transaction.NodeId,
+                            PointAccountID = companyPointAccounts.Data.Find(x => x.CurrencyCode.Equals(transaction.Currency, StringComparison.InvariantCultureIgnoreCase))?.Id,
+                            RedeemType = RedeemType.Commission,
+                            ReferenceNo = $"{transaction.BonusId} | {transaction.NodeId} | {transaction.Currency}", // Concat BonusId, NodeId, Currency
+                            Source = "Pillars",
+                            TransactionType = TransactionType.Credit
+                        });
+                }
+                var createTransResults = new List<CreatePointAccountTransaction>();
+
+                try
+                {
+                    activityLog = new ActivityLogRequest
+                    {
+                        APIName = "ProcessCommissionBatch",
+                        CompanyId = headerData.CompanyId,
+                        Status = 200,
+                        Request = $"ProcessCommissionBatch Step 6. Payout Batch Request: {JsonConvert.SerializeObject(payoutBatchRequest)}",
+                        RequestDateTime = DateTime.Now
+                    };
+                    await _client.PostJson<BooleanResponse, ActivityLogRequest>(headers, $"https://zippyapi.paymenture.com/api/ActivityLog/CreateActivityLog", activityLog);
+
+                    var response = await _client.PostJson<List<StringResponse>, List<CustomerPointTransactionsRequest>>(headers, $"https://zippyapi.paymenture.com/api/CustomerPointTransactions/BulkCreatePointTransaction", payoutBatchRequest);
+
+                    activityLog = new ActivityLogRequest
+                    {
+                        APIName = "ProcessCommissionBatch",
+                        CompanyId = headerData.CompanyId,
+                        Status = 200,
+                        Request = $"ProcessCommissionBatch Step 7. Payout Batch Request: {JsonConvert.SerializeObject(payoutBatchRequest)}",
+                        Response = JsonConvert.SerializeObject(response),
+                        RequestDateTime = DateTime.Now
+                    };
+                    await _client.PostJson<BooleanResponse, ActivityLogRequest>(headers, $"https://zippyapi.paymenture.com/api/ActivityLog/CreateActivityLog", activityLog);
+
+                    foreach (var item in response)
+                    {
+                        try
+                        {
+                            createTransResults.Add(new CreatePointAccountTransaction { TransactionNumber = item.Data, Status = item.Status, Message = item.Message });
+                        }
+                        catch (Exception)
+                        {
+                            createTransResults.Add(new CreatePointAccountTransaction { TransactionNumber = item.Data, Status = ResponseStatus.Failed, Message = item.Message });
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    activityLog = new ActivityLogRequest
+                    {
+                        APIName = "ProcessCommissionBatch",
+                        CompanyId = headerData.CompanyId,
+                        Status = 500,
+                        Request = $"Create Transactions: {JsonConvert.SerializeObject(payoutBatchRequest)}",
+                        Response = ex.ToString(),
+                        ErrorDescription = ex.Message,
+                        RequestDateTime = DateTime.Now
+                    };
+                    await _client.PostJson<BooleanResponse, ActivityLogRequest>(headers, $"https://zippyapi.paymenture.com/api/ActivityLog/CreateActivityLog", activityLog);
+
+                    throw;
+                }
+
+                foreach (var res in createTransResults)
+                {
+                    result.Add(new StringResponse
+                    {
+                        Data = res.TransactionNumber,
+                        Status = res.Status,
+                        Message = res.Message
+                    });
+                }
+            }
+            catch(Exception ex)
+            {
+                var activityLog = new ActivityLogRequest
+                {
+                    APIName = "ProcessCommissionBatch",
+                    CompanyId = headerData.CompanyId,
+                    Status = 500,
+                    Request = "Unknown error",
+                    Response = ex.ToString(),
+                    ErrorDescription = ex.Message,
+                    RequestDateTime = DateTime.Now
+                };
+                await _client.PostJson<BooleanResponse, ActivityLogRequest>(headers, $"https://zippyapi.paymenture.com/api/ActivityLog/CreateActivityLog", activityLog);
             }
 
             return result;
