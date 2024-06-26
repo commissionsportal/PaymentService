@@ -2,8 +2,6 @@
 using PaymentService.Interfaces;
 using PaymentService.Models;
 using PaymentService.Models.PaymentureWallet;
-using System.Net;
-using System.Reflection.PortableExecutable;
 
 namespace PaymentService.Services
 {
@@ -36,7 +34,7 @@ namespace PaymentService.Services
                 };
                 await _client.PostJson<BooleanResponse, ActivityLogRequest>(headers, $"https://zippyapi.paymenture.com/api/ActivityLog/CreateActivityLog", activityLog);
 
-                var customersToVerify = new VerifyCustomersRequest { CompanyId = headerData.CompanyId, ExternalIds = batch.Releases.Select(x => x.NodeId).ToList() };
+                var customersToVerify = new VerifyCustomersRequest { CompanyId = headerData.CompanyId, ExternalIds = batch.Releases.Select(x => x.NodeId).Distinct().ToList() };
                 var companyPointAccounts = await _client.Get<CompanyPointAccount>(headers, $"https://zippyapi.paymenture.com/api/CompanyPointAccount/GetCompanyPointAccounts?companyId={headerData.CompanyId}");
 
                 activityLog = new ActivityLogRequest
@@ -54,7 +52,6 @@ namespace PaymentService.Services
                     return result;
                 }
 
-                //"[{\"data\":\"897F8AF401\",\"status\":\"Failed\",\"errorDescription\":null,\"message\":null,\"errorTransactionId\":null}]"
                 var customerVerifications = await _client.PostJson<List<StringResponse>, VerifyCustomersRequest>(headers, $"https://zippyapi.paymenture.com/api/Customer/VerifyCustomers", customersToVerify);
                 var createCustomersRequest = new List<PaymentureCustomer>();
 
@@ -132,7 +129,7 @@ namespace PaymentService.Services
                 {
                     try
                     {
-                        var createCustomersResponse = await _client.PostJson<BooleanResponse, List<PaymentureCustomer>>(headers, $"https://zippyapi.paymenture.com/api/Customer/BulkCreateCustomers", createCustomersRequest);
+                        var createCustomersResponse = await _client.PostJson<List<StringResponse>, List<PaymentureCustomer>>(headers, $"https://zippyapi.paymenture.com/api/v2/Customer/BulkCreateCustomers", createCustomersRequest);
 
                         activityLog = new ActivityLogRequest
                         {
@@ -229,7 +226,7 @@ namespace PaymentService.Services
                     };
                     await _client.PostJson<BooleanResponse, ActivityLogRequest>(headers, $"https://zippyapi.paymenture.com/api/ActivityLog/CreateActivityLog", activityLog);
 
-                    var response = await _client.PostJson<List<StringResponse>, List<CustomerPointTransactionsRequest>>(headers, $"https://zippyapi.paymenture.com/api/CustomerPointTransactions/BulkCreatePointTransaction", payoutBatchRequest);
+                    var response = await _client.PostJson<List<StringResponse>, List<CustomerPointTransactionsRequest>>(headers, $"https://zippyapi.paymenture.com/api/v2/CustomerPointTransactions/BulkCreatePointTransaction", payoutBatchRequest);
 
                     activityLog = new ActivityLogRequest
                     {
@@ -281,7 +278,7 @@ namespace PaymentService.Services
                     });
                 }
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 var activityLog = new ActivityLogRequest
                 {
