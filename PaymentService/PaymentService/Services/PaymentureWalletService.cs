@@ -73,7 +73,7 @@ namespace PaymentService.Services
                         var details = customerDetails.FirstOrDefault(x => x.Id == customer.Data);
                         if (details != null)
                         {
-                            var customerAddress = details.Addresses.FirstOrDefault();
+                            var customerAddress = details.Addresses?.FirstOrDefault();
                             createCustomersRequest.Add(new PaymentureCustomer
                             {
                                 ExternalCustomerID = details.Id,
@@ -93,7 +93,7 @@ namespace PaymentService.Services
                                     Address2 = customerAddress?.Line2,
                                     City = customerAddress?.City,
                                     State = customerAddress?.StateCode,
-                                    CountryCode = customerAddress?.CountryCode,
+                                    CountryCode = customerAddress?.CountryCode ?? "US",
                                     Zip = customerAddress?.Zip
                                 }
                             });
