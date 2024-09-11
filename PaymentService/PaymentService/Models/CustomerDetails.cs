@@ -12,7 +12,7 @@
         public List<PhoneNumber> PhoneNumbers { get; set; } = new List<PhoneNumber>();
         public string EmailAddress { get; set; } = string.Empty;
         public string Language { get; set; } = string.Empty;
-        public DateTime BirthDate { get; set; }
+        public DateTime? BirthDate { get; set; }
     }
 
     public class Address
