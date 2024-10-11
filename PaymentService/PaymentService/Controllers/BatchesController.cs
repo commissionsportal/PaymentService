@@ -48,11 +48,11 @@ namespace PaymentService.Controllers
                 {
                     Message = ex.Message,
                     ExceptionType = ex.GetType().Name,
-                    StackTrace = ex.StackTrace,
+                    StackTrace = ex.StackTrace ?? "",
                     InnerException = new InnerErrorResponse
                     {
-                        Message = ex.InnerException?.Message,
-                        StackTrace = ex.StackTrace
+                        Message = ex.InnerException?.Message ?? "",
+                        StackTrace = ex.StackTrace ?? ""
                     }
                 };
                 return StatusCode(500, error);
